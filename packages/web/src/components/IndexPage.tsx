@@ -7,14 +7,9 @@ import { ChatInterface } from '@/components/ChatInterface';
 import { ContextPanel } from '@/components/ContextPanel';
 import { NewProjectDialog } from '@/components/NewProjectDialog';
 import { useProjects } from '@/hooks/useProjects';
-import {
-  domains,
-  mockConversations,
-  mockMessages,
-  mockDocuments,
-  getDomainById,
-} from '@/data/mockData';
-import { Project, DomainType, Conversation, Message } from '@/types/council';
+import { api } from '@/lib/api';
+import { domains, getDomainById } from '@/data/mockData';
+import { Project, DomainType, Conversation, Message, ContextDocument } from '@/types/council';
 import { Loader2 } from 'lucide-react';
 
 export function IndexPage() {
@@ -22,10 +17,13 @@ export function IndexPage() {
 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [currentDomain, setCurrentDomain] = useState<DomainType>('marketing');
-  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(mockConversations[0]);
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [documents, setDocuments] = useState<ContextDocument[]>([]);
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   // Auto-select first project when projects load
   useEffect(() => {
@@ -46,30 +44,61 @@ export function IndexPage() {
     ? messages.filter(m => m.conversationId === currentConversation.id)
     : [];
 
-  const handleSendMessage = (content: string) => {
-    if (!currentConversation) return;
+  const handleSendMessage = async (content: string) => {
+    if (isAiLoading) return;
+
+    // Auto-create conversation if none exists
+    let conversation = currentConversation;
+    if (!conversation) {
+      if (!currentProject) return;
+
+      conversation = {
+        id: `conv-${Date.now()}`,
+        title: 'New conversation',
+        domainId: currentDomain,
+        projectId: currentProject.id,
+        updatedAt: new Date(),
+        createdAt: new Date(),
+      };
+      setConversations(prev => [conversation!, ...prev]);
+      setCurrentConversation(conversation);
+    }
 
     const newMessage: Message = {
       id: `msg-${Date.now()}`,
-      conversationId: currentConversation.id,
+      conversationId: conversation.id,
       role: 'user',
       content,
       createdAt: new Date(),
     };
 
     setMessages(prev => [...prev, newMessage]);
+    setIsAiLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const result = await api.chat.generate(content, currentDomain);
+
       const aiResponse: Message = {
         id: `msg-${Date.now() + 1}`,
-        conversationId: currentConversation.id,
+        conversationId: conversation.id,
         role: 'agent',
-        content: `Thank you for your question about ${currentDomain}. As your ${domain.agentRole}, I'm analyzing your request and will provide insights based on my expertise in ${domain.description.toLowerCase()}.\n\nThis is a simulated response. In a production environment, this would be powered by an AI model with access to your uploaded context documents.`,
+        content: result.response,
         createdAt: new Date(),
       };
       setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
+    } catch (error) {
+      console.error('Failed to get AI response:', error);
+      const errorMessage: Message = {
+        id: `msg-${Date.now() + 1}`,
+        conversationId: conversation.id,
+        role: 'agent',
+        content: 'Sorry, I encountered an error while processing your request. Please try again.',
+        createdAt: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   const handleNewConversation = () => {
@@ -83,12 +112,13 @@ export function IndexPage() {
       updatedAt: new Date(),
       createdAt: new Date(),
     };
+    setConversations(prev => [newConversation, ...prev]);
     setCurrentConversation(newConversation);
   };
 
   const handleDomainChange = (domain: DomainType) => {
     setCurrentDomain(domain);
-    const domainConversations = mockConversations.filter(c => c.domainId === domain);
+    const domainConversations = conversations.filter(c => c.domainId === domain);
     setCurrentConversation(domainConversations[0] || null);
   };
 
@@ -151,7 +181,7 @@ export function IndexPage() {
       {/* Conversation List */}
       <div className="w-72 border-r border-border bg-surface-1">
         <ConversationList
-          conversations={mockConversations}
+          conversations={conversations}
           currentDomain={currentDomain}
           currentConversation={currentConversation}
           onConversationSelect={setCurrentConversation}
@@ -166,12 +196,13 @@ export function IndexPage() {
             messages={conversationMessages}
             domain={domain}
             onSendMessage={handleSendMessage}
+            isLoading={isAiLoading}
           />
         </div>
 
         {/* Context Panel */}
         <ContextPanel
-          documents={mockDocuments}
+          documents={documents}
           currentDomain={currentDomain}
           isOpen={isContextPanelOpen}
           onToggle={() => setIsContextPanelOpen(!isContextPanelOpen)}

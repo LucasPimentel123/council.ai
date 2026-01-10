@@ -59,3 +59,12 @@ model ContextDocument {
   @@index([projectId])
   @@index([domainId])
 }
+
+model ExpertDomain {
+  id           String @id
+  name         String
+  description  String
+  agentName    String
+  agentRole    String
+  systemPrompt String @db.Text
+}

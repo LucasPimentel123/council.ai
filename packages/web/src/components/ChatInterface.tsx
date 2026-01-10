@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Sparkles } from 'lucide-react';
+import { Send, Paperclip, Sparkles, Loader2 } from 'lucide-react';
 import { Message, Domain, DomainType } from '@/types/council';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -18,9 +18,10 @@ interface ChatInterfaceProps {
   messages: Message[];
   domain: Domain;
   onSendMessage: (content: string) => void;
+  isLoading?: boolean;
 }
 
-export function ChatInterface({ messages, domain, onSendMessage }: ChatInterfaceProps) {
+export function ChatInterface({ messages, domain, onSendMessage, isLoading = false }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -38,7 +39,7 @@ export function ChatInterface({ messages, domain, onSendMessage }: ChatInterface
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputValue.trim()) {
+    if (inputValue.trim() && !isLoading) {
       onSendMessage(inputValue.trim());
       setInputValue('');
     }
@@ -141,15 +142,19 @@ export function ChatInterface({ messages, domain, onSendMessage }: ChatInterface
             />
             <button
               type="submit"
-              disabled={!inputValue.trim()}
+              disabled={!inputValue.trim() || isLoading}
               className={cn(
                 'p-3 rounded-xl m-1 transition-all shrink-0',
-                inputValue.trim()
+                inputValue.trim() && !isLoading
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                   : 'text-muted-foreground'
               )}
             >
-              <Send className="w-5 h-5" />
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
             </button>
           </div>
           <p className="text-xs text-muted-foreground/60 mt-2 text-center">

@@ -9,6 +9,9 @@ import {
   PrismaMessageRepository,
   PrismaContextDocumentRepository,
 } from "./infrastructure/database/repositories/index.js";
+import { env } from "./infrastructure/config/env.js";
+import { LangChainClaudeProvider } from "./infrastructure/llm/index.js";
+import { PrismaExpertDomainRepository } from "./infrastructure/repositories/index.js";
 
 // Application - Services
 import { EmbeddingService } from "./application/services/EmbeddingService.js";
@@ -36,12 +39,14 @@ import {
   ListDocuments,
   DeleteDocument,
 } from "./application/use-cases/document/index.js";
+import { GenerateAIResponse } from "./application/use-cases/chat/index.js";
 
 // Presentation - Controllers
 import { ProjectController } from "./presentation/http/controllers/ProjectController.js";
 import { ConversationController } from "./presentation/http/controllers/ConversationController.js";
 import { MessageController } from "./presentation/http/controllers/MessageController.js";
 import { DocumentController } from "./presentation/http/controllers/DocumentController.js";
+import { ChatController } from "./presentation/http/controllers/ChatController.js";
 
 // Presentation - Routes
 import { healthRouter } from "./presentation/http/routes/health.js";
@@ -58,6 +63,7 @@ import {
   createDocumentRouter,
   createProjectDocumentRouter,
 } from "./presentation/http/routes/documents.js";
+import { createChatRouter } from "./presentation/http/routes/chat.js";
 
 // Presentation - Middleware
 import { errorHandler } from "./presentation/http/middleware/errorHandler.js";
@@ -74,9 +80,13 @@ export function createApp() {
   const conversationRepository = new PrismaConversationRepository(prisma);
   const messageRepository = new PrismaMessageRepository(prisma);
   const documentRepository = new PrismaContextDocumentRepository(prisma);
+  const expertDomainRepository = new PrismaExpertDomainRepository(prisma);
 
   // Initialize services
   const embeddingService = new EmbeddingService();
+
+  // Initialize LLM provider
+  const llmProvider = new LangChainClaudeProvider(env.ANTHROPIC_API_KEY);
 
   // Initialize use cases
   const createProject = new CreateProject(projectRepository);
@@ -114,6 +124,11 @@ export function createApp() {
   const listDocuments = new ListDocuments(documentRepository);
   const deleteDocument = new DeleteDocument(documentRepository);
 
+  const generateAIResponse = new GenerateAIResponse(
+    llmProvider,
+    expertDomainRepository
+  );
+
   // Initialize controllers
   const projectController = new ProjectController(
     createProject,
@@ -141,6 +156,8 @@ export function createApp() {
     deleteDocument
   );
 
+  const chatController = new ChatController(generateAIResponse);
+
   // Routes
   app.use("/health", healthRouter);
   app.use("/projects", createProjectRouter(projectController));
@@ -159,6 +176,7 @@ export function createApp() {
   );
   app.use("/messages", createMessageRouter(messageController));
   app.use("/documents", createDocumentRouter(documentController));
+  app.use("/chat", createChatRouter(chatController));
 
   // Error handling
   app.use(errorHandler);

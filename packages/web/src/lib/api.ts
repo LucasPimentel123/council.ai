@@ -50,4 +50,18 @@ export const api = {
       }
     },
   },
+
+  chat: {
+    generate: async (
+      message: string,
+      domainId: string
+    ): Promise<{ response: string; model: string }> => {
+      const response = await fetch(`${API_BASE_URL}/chat/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, domainId }),
+      });
+      return handleResponse<{ response: string; model: string }>(response);
+    },
+  },
 };
